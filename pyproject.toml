@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rtsp-discover"
+version = "1.0.0"
+description = "Probe IP cameras via HTTP/RTSP to detect active video streams. Tests 27+ known camera endpoint patterns against a given host."
+requires-python = ">=3.11"
+dependencies = [
+    "requests",
+    "opencv-python",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "ruff>=0.6.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
