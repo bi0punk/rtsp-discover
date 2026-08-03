@@ -65,7 +65,7 @@ rtsp-discover/
 ## Instalación
 
 ```bash
-git clone https://github.com/tu-usuario/rtsp-discover.git
+git clone https://github.com/bi0punk/rtsp-discover.git
 cd rtsp-discover
 pip install -r requirements.txt
 ```
