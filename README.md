@@ -1,44 +1,67 @@
-# RTSP Discover
+# rtsp-discover
 
 Probe de cámaras IP que prueba 27+ endpoints HTTP/RTSP conocidos para detectar streams de video activos.
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.11+-blue)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://python.org)
+[![CI](https://github.com/bi0punk/rtsp-discover/actions/workflows/ci.yml/badge.svg)](https://github.com/bi0punk/rtsp-discover/actions)
 
-## Tabla de Contenidos
+## Contenido
 
 - [Características](#características)
+- [Arquitectura](#arquitectura)
 - [Stack](#stack)
-- [Estructura](#estructura)
-- [Requisitos](#requisitos)
+- [Estructura del repositorio](#estructura-del-repositorio)
 - [Instalación](#instalación)
 - [Uso](#uso)
-- [Tests](#tests)
 - [Configuración](#configuración)
-- [CI](#ci)
-- [Datos](#datos)
-- [Limitaciones / Roadmap](#limitaciones--roadmap)
+- [Tests / CI](#tests--ci)
+- [Roadmap](#roadmap)
 - [Licencia](#licencia)
 
 ## Características
 
-- 27+ endpoints conocidos de cámaras IP (DAHUA, HIKVISION, ONVIF, genéricos, etc.)
-- Placeholders `[USERNAME]`, `[PASSWORD]`, `[CHANNEL]` en las rutas
-- Probes JPEG (snapshot), MJPEG (stream), RTSP (ffprobe + OpenCV), HTTP genérico
-- Soporte para autenticación HTTP Basic Auth y credenciales embebidas en URL RTSP
-- Timeout configurable por prueba
-- Exportación de resultados a CSV
-- Modo anónimo (prueba sin credenciales además de las proporcionadas)
+- 27+ endpoints conocidos de cámaras IP (DAHUA, HIKVISION, ONVIF, genéricos, etc.).
+- Placeholders `[USERNAME]`, `[PASSWORD]`, `[CHANNEL]` en las rutas.
+- Probes JPEG (snapshot), MJPEG (stream), RTSP (ffprobe + OpenCV), HTTP genérico.
+- Soporte para autenticación HTTP Basic Auth y credenciales embebidas en URL RTSP.
+- Timeout configurable por prueba.
+- Exportación de resultados a CSV.
+- Modo anónimo (prueba sin credenciales además de las proporcionadas).
+
+## Arquitectura
+
+```mermaid
+flowchart TD
+  CLI[app.py<br/>--ip --user --passw ...] --> EXP[Expansión de endpoints]
+  EXP --> P1[HTTP JPEG snapshot]
+  EXP --> P2[HTTP MJPEG stream]
+  EXP --> P3[RTSP ffprobe]
+  EXP --> P4[RTSP OpenCV VideoCapture]
+  EXP --> P5[HTTP genérico]
+
+  P3 --> FF{ffprobe disponible?}
+  FF -->|Sí| DETECT[Stream detectado]
+  FF -->|No| OP[Fallback a OpenCV]
+  P4 --> OP
+  OP --> RESULT[Resultado por prueba<br/>ok / status / elapsed_ms]
+  P1 --> RESULT
+  P2 --> RESULT
+  P5 --> RESULT
+
+  RESULT --> CONSOLE[Console: OK / FAIL + resumen]
+  RESULT --> CSV[CSV exportable]
+```
 
 ## Stack
 
-- **Python 3.11+**
+- Python 3.11+
 - `requests` — peticiones HTTP
 - `opencv-python` — captura de frames vía VideoCapture
 - `ffprobe` (opcional, parte de ffmpeg) — detección de streams RTSP
 - Linting: Ruff | Tests: pytest
 
-## Estructura
+## Estructura del repositorio
 
 ```
 rtsp-discover/
@@ -49,20 +72,14 @@ rtsp-discover/
 ├── resultados_cam.csv      # Ejemplo de exportación CSV
 ├── tests/
 │   └── test_smoke.py       # Tests de humo
-├── .github/
-│   └── workflows/
-│       └── ci.yml          # CI: Ruff + pytest
+├── .github/workflows/ci.yml  # CI: Ruff + pytest
 ├── LICENSE
 └── README.md
 ```
 
-## Requisitos
-
-- Python >= 3.11
-- `pip install requests opencv-python`
-- Opcional: `ffprobe` (`sudo apt install ffmpeg`)
-
 ## Instalación
+
+Requisitos: Python >= 3.11, `pip install requests opencv-python`, opcional `ffprobe` (`sudo apt install ffmpeg`).
 
 ```bash
 git clone https://github.com/bi0punk/rtsp-discover.git
@@ -85,7 +102,7 @@ python app.py --ip 192.168.1.100 --user admin --passw 12345 --timeout 5 --csv re
 | `--port-rtsp` | 554 | Puerto RTSP |
 | `--user` | `""` | Usuario |
 | `--passw` | `""` | Contraseña |
-| `--channel` | 0 | Canal para endpoints [CHANNEL] |
+| `--channel` | 0 | Canal para endpoints `[CHANNEL]` |
 | `--timeout` | 5 | Timeout por prueba (segundos) |
 | `--http-basic-auth` | — | Probar HTTP Basic Auth |
 | `--no-anon` | — | No probar acceso anónimo |
@@ -118,28 +135,26 @@ Rutas válidas detectadas:
    rtsp://admin:12345@192.168.1.100:554/live/ch00_0
 ```
 
-## Tests
+## Configuración
+
+Variables de entorno (`.env.example`):
+
+| Variable | Default | Descripción |
+|---|---|---|
+| `TARGET_IP` | `192.168.1.100` | IP/host a probar |
+| `USERNAME` | `admin` | Usuario |
+| `PASSWORD` | `your_password` | Contraseña |
+| `TIMEOUT` | `5` | Timeout por prueba |
+| `OUTPUT_CSV` | `resultados_cam.csv` | Archivo CSV de salida |
+
+## Tests / CI
 
 ```bash
 pip install pytest
 python -m pytest tests/ -v
 ```
 
-## Configuración
-
-Variables de entorno (`.env.example`):
-
-```env
-TARGET_IP=192.168.1.100
-USERNAME=admin
-PASSWORD=your_password
-TIMEOUT=5
-OUTPUT_CSV=resultados_cam.csv
-```
-
-## CI
-
-GitHub Actions ejecuta Ruff linting y pytest en cada push y pull request:
+El workflow `.github/workflows/ci.yml` ejecuta Ruff linting y pytest en cada push y pull request:
 
 ```yaml
 - name: Ruff check
@@ -148,17 +163,16 @@ GitHub Actions ejecuta Ruff linting y pytest en cada push y pull request:
   run: uv run pytest -q
 ```
 
-## Datos
+## Roadmap
 
-El archivo `resultados_cam.csv` contiene un ejemplo del formato de exportación con los campos: `endpoint_name`, `media_type`, `protocol`, `credential_label`, `url`, `ok`, `method_used`, `status_code`, `content_type`, `detail`, `elapsed_ms`.
-
-## Limitaciones / Roadmap
-
-- No soporta autenticación digest (solo Basic Auth y credenciales en URL)
-- Depende de ffprobe para detección óptima de RTSP (fallback a OpenCV)
-- No realiza escaneo de puertos — requiere conocer los puertos HTTP/RTSP
-- Los endpoints son estáticos; no hay descubrimiento ONVIF automático
-- Futuro: escaneo de puertos, autenticación digest, descubrimiento ONVIF WS-Discovery, soporte para RTSP over TCP/TLS, paralelización de pruebas
+- [x] Probes JPEG/MJPEG/RTSP/HTTP con Basic Auth y modo anónimo
+- [x] Exportación CSV con detalle por prueba
+- [ ] No soporta autenticación digest (solo Basic Auth y credenciales en URL)
+- [ ] Depende de ffprobe para detección óptima de RTSP (fallback a OpenCV)
+- [ ] No realiza escaneo de puertos — requiere conocer los puertos HTTP/RTSP
+- [ ] Los endpoints son estáticos; no hay descubrimiento ONVIF automático
+- [ ] Escaneo de puertos, autenticación digest, ONVIF WS-Discovery
+- [ ] Soporte para RTSP over TCP/TLS y paralelización de pruebas
 
 ## Licencia
 
