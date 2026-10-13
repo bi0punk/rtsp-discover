@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
 Probe de cámaras IP: prueba múltiples endpoints HTTP/RTSP para detectar si existe transmisión.
@@ -31,14 +30,14 @@ import shutil
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, asdict
-from typing import List, Optional, Tuple
+from dataclasses import asdict, dataclass
 from urllib.parse import quote
 
 import requests
 
 try:
     import cv2  # type: ignore
+
     HAS_CV2 = True
 except Exception:
     HAS_CV2 = False
@@ -49,7 +48,12 @@ except Exception:
 # =========================
 
 ENDPOINTS = [
-    ("0001 / 960P Audio Mini / China Cam", "JPEG", "http", "snap.jpg?usr=[USERNAME]&pwd=[PASSWORD]"),
+    (
+        "0001 / 960P Audio Mini / China Cam",
+        "JPEG",
+        "http",
+        "snap.jpg?usr=[USERNAME]&pwd=[PASSWORD]",
+    ),
     ("1000 / Fluereon / Generic IP Cam", "FFMPEG", "rtsp", "/1"),
     ("16CH", "JPEG", "http", "cgi-bin/webra_fcgi.fcgi?api=get_jpeg_raw&chno=[CHANNEL]"),
     ("Bseries", "FFMPEG", "http", "/"),
@@ -69,13 +73,23 @@ ENDPOINTS = [
     ("IPELA HD / V380", "FFMPEG", "rtsp", "/11"),
     ("nolist", "JPEG", "http", "/cgi-bin/webra_fcgi.fcgi?api=get_jpeg_raw&chno=0"),
     ("ONVIF / Other", "FFMPEG", "rtsp", "/ucast/11"),
-    ("Other cam1/mpeg4 with query creds", "FFMPEG", "rtsp", "cam1/mpeg4?user=[USERNAME]&pwd=[PASSWORD]"),
+    (
+        "Other cam1/mpeg4 with query creds",
+        "FFMPEG",
+        "rtsp",
+        "cam1/mpeg4?user=[USERNAME]&pwd=[PASSWORD]",
+    ),
     ("Other / ResX-IP-Cams", "FFMPEG", "rtsp", "/0/av0"),
     ("Other snap.jpg JpegSize", "JPEG", "http", "snap.jpg?JpegSize=M"),
     ("Other snap.jpg usr/pwd", "JPEG", "http", "/snap.jpg?usr=[USERNAME]&pwd="),
     ("PTZ", "FFMPEG", "rtsp", "/cam1/mpeg4"),
     ("rtsp realmonitor", "FFMPEG", "rtsp", "/realmonitor?channel=0&stream=0.sdp"),
-    ("rtsp user_password_channel", "FFMPEG", "rtsp", "/user=[USERNAME]_password=[PASSWORD]_channel=1_stream=1.sdp"),
+    (
+        "rtsp user_password_channel",
+        "FFMPEG",
+        "rtsp",
+        "/user=[USERNAME]_password=[PASSWORD]_channel=1_stream=1.sdp",
+    ),
 ]
 
 
@@ -83,11 +97,13 @@ ENDPOINTS = [
 # Data classes
 # =========================
 
+
 @dataclass
 class Credential:
     label: str
     username: str
     password: str
+
 
 @dataclass
 class ProbeResult:
@@ -98,8 +114,8 @@ class ProbeResult:
     url: str
     ok: bool
     method_used: str
-    status_code: Optional[int]
-    content_type: Optional[str]
+    status_code: int | None
+    content_type: str | None
     detail: str
     elapsed_ms: int
 
@@ -108,26 +124,37 @@ class ProbeResult:
 # Helpers
 # =========================
 
+
 def normalize_base_url(host: str, scheme: str) -> str:
     host = host.strip()
     host = re.sub(r"^\w+://", "", host)
     return f"{scheme}://{host}"
+
 
 def join_url(base: str, path: str) -> str:
     if path.startswith("/"):
         return base.rstrip("/") + path
     return base.rstrip("/") + "/" + path
 
+
 def fill_placeholders(path: str, cred: Credential, channel: int) -> str:
     u = quote(cred.username, safe="")
     p = quote(cred.password, safe="")
     return path.replace("[USERNAME]", u).replace("[PASSWORD]", p).replace("[CHANNEL]", str(channel))
 
-def build_url(host: str, protocol: str, path: str, cred: Credential, channel: int, embed_rtsp_auth: bool) -> str:
+
+def build_url(
+    host: str, protocol: str, path: str, cred: Credential, channel: int, embed_rtsp_auth: bool
+) -> str:
     filled = fill_placeholders(path, cred, channel)
     base = normalize_base_url(host, protocol)
 
-    if protocol == "rtsp" and embed_rtsp_auth and "[USERNAME]" not in path and "[PASSWORD]" not in path:
+    if (
+        protocol == "rtsp"
+        and embed_rtsp_auth
+        and "[USERNAME]" not in path
+        and "[PASSWORD]" not in path
+    ):
         host_only = re.sub(r"^\w+://", "", base)
         if cred.username or cred.password:
             auth = f"{quote(cred.username, safe='')}:{quote(cred.password, safe='')}@"
@@ -140,7 +167,10 @@ def build_url(host: str, protocol: str, path: str, cred: Credential, channel: in
 # Probes HTTP
 # =========================
 
-def probe_http_jpeg(url: str, timeout: int, auth: Optional[Tuple[str, str]]) -> Tuple[bool, Optional[int], Optional[str], str]:
+
+def probe_http_jpeg(
+    url: str, timeout: int, auth: tuple[str, str] | None
+) -> tuple[bool, int | None, str | None, str]:
     try:
         r = requests.get(url, timeout=timeout, stream=True, auth=auth)
         ct = r.headers.get("Content-Type", "")
@@ -158,7 +188,10 @@ def probe_http_jpeg(url: str, timeout: int, auth: Optional[Tuple[str, str]]) -> 
     except requests.RequestException as e:
         return False, None, None, f"requests error: {e}"
 
-def probe_http_mjpeg(url: str, timeout: int, auth: Optional[Tuple[str, str]]) -> Tuple[bool, Optional[int], Optional[str], str]:
+
+def probe_http_mjpeg(
+    url: str, timeout: int, auth: tuple[str, str] | None
+) -> tuple[bool, int | None, str | None, str]:
     try:
         r = requests.get(url, timeout=timeout, stream=True, auth=auth)
         ct = r.headers.get("Content-Type", "")
@@ -179,7 +212,10 @@ def probe_http_mjpeg(url: str, timeout: int, auth: Optional[Tuple[str, str]]) ->
     except requests.RequestException as e:
         return False, None, None, f"requests error: {e}"
 
-def probe_http_generic_video_with_cv2(url: str, timeout: int) -> Tuple[bool, Optional[int], Optional[str], str]:
+
+def probe_http_generic_video_with_cv2(
+    url: str, timeout: int
+) -> tuple[bool, int | None, str | None, str]:
     if not HAS_CV2:
         return False, None, None, "OpenCV no instalado (opencv-python)"
     try:
@@ -189,7 +225,12 @@ def probe_http_generic_video_with_cv2(url: str, timeout: int) -> Tuple[bool, Opt
             ok, frame = cap.read()
             if ok and frame is not None:
                 cap.release()
-                return True, None, None, f"Frame leído con OpenCV {frame.shape if hasattr(frame, 'shape') else ''}"
+                return (
+                    True,
+                    None,
+                    None,
+                    f"Frame leído con OpenCV {frame.shape if hasattr(frame, 'shape') else ''}",
+                )
             time.sleep(0.2)
         cap.release()
         return False, None, None, "Sin frame por OpenCV en timeout"
@@ -201,17 +242,23 @@ def probe_http_generic_video_with_cv2(url: str, timeout: int) -> Tuple[bool, Opt
 # Probes RTSP
 # =========================
 
+
 def ffprobe_available() -> bool:
     return shutil.which("ffprobe") is not None
 
-def probe_rtsp_ffprobe(url: str, timeout: int) -> Tuple[bool, str]:
+
+def probe_rtsp_ffprobe(url: str, timeout: int) -> tuple[bool, str]:
     cmd = [
         "ffprobe",
-        "-v", "error",
-        "-rtsp_transport", "tcp",
-        "-timeout", str(timeout * 1_000_000),
+        "-v",
+        "error",
+        "-rtsp_transport",
+        "tcp",
+        "-timeout",
+        str(timeout * 1_000_000),
         "-show_streams",
-        "-select_streams", "v:0",
+        "-select_streams",
+        "v:0",
         url,
     ]
     try:
@@ -225,7 +272,8 @@ def probe_rtsp_ffprobe(url: str, timeout: int) -> Tuple[bool, str]:
     except Exception as e:
         return False, f"ffprobe error: {e}"
 
-def probe_rtsp_cv2(url: str, timeout: int) -> Tuple[bool, str]:
+
+def probe_rtsp_cv2(url: str, timeout: int) -> tuple[bool, str]:
     if not HAS_CV2:
         return False, "OpenCV no instalado (opencv-python)"
     try:
@@ -235,7 +283,10 @@ def probe_rtsp_cv2(url: str, timeout: int) -> Tuple[bool, str]:
             ok, frame = cap.read()
             if ok and frame is not None:
                 cap.release()
-                return True, f"Frame leído con OpenCV {frame.shape if hasattr(frame, 'shape') else ''}"
+                return (
+                    True,
+                    f"Frame leído con OpenCV {frame.shape if hasattr(frame, 'shape') else ''}",
+                )
             time.sleep(0.2)
         cap.release()
         return False, "Sin frame por OpenCV en timeout"
@@ -247,9 +298,10 @@ def probe_rtsp_cv2(url: str, timeout: int) -> Tuple[bool, str]:
 # Dispatcher
 # =========================
 
+
 def probe_endpoint(
     host: str,
-    endpoint: Tuple[str, str, str, str],
+    endpoint: tuple[str, str, str, str],
     cred: Credential,
     channel: int,
     timeout: int,
@@ -259,7 +311,11 @@ def probe_endpoint(
     name, media_type, protocol, path = endpoint
     url = build_url(host, protocol, path, cred, channel, embed_rtsp_auth=embed_rtsp_auth)
 
-    auth = (cred.username, cred.password) if http_basic_auth and (cred.username or cred.password) else None
+    auth = (
+        (cred.username, cred.password)
+        if http_basic_auth and (cred.username or cred.password)
+        else None
+    )
 
     t0 = time.time()
     ok = False
@@ -349,6 +405,7 @@ def probe_endpoint(
 # CLI
 # =========================
 
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Prueba endpoints de cámaras IP (HTTP/RTSP) para detectar transmisión."
@@ -363,14 +420,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--passw", default="", help="Password")
 
     parser.add_argument("--timeout", type=int, default=5, help="Timeout por prueba (segundos)")
-    parser.add_argument("--http-basic-auth", action="store_true", help="Además intenta HTTP Basic Auth")
-    parser.add_argument("--no-embed-rtsp-auth", action="store_true", help="No insertar user:pass@ en URL RTSP")
+    parser.add_argument(
+        "--http-basic-auth", action="store_true", help="Además intenta HTTP Basic Auth"
+    )
+    parser.add_argument(
+        "--no-embed-rtsp-auth", action="store_true", help="No insertar user:pass@ en URL RTSP"
+    )
     parser.add_argument("--no-anon", action="store_true", help="No probar acceso anónimo")
     parser.add_argument("--only-success", action="store_true", help="Muestra solo resultados OK")
     parser.add_argument("--csv", default="", help="Ruta CSV de salida (opcional)")
     parser.add_argument("--verbose", action="store_true", help="Muestra URLs completas")
 
     return parser.parse_args()
+
 
 def host_with_default_port(ip_or_host: str, proto: str, port_http: int, port_rtsp: int) -> str:
     if re.match(r"^\[.*\]:\d+$", ip_or_host) or re.match(r"^[^/]+:\d+$", ip_or_host):
@@ -381,22 +443,23 @@ def host_with_default_port(ip_or_host: str, proto: str, port_http: int, port_rts
         return f"{ip_or_host}:{port_rtsp}"
     return ip_or_host
 
-def build_credentials(args: argparse.Namespace) -> List[Credential]:
-    creds: List[Credential] = []
+
+def build_credentials(args: argparse.Namespace) -> list[Credential]:
+    creds: list[Credential] = []
 
     # Credencial principal
     creds.append(Credential(label="user", username=args.user, password=args.passw))
 
     # Intento anónimo opcional
-    if not args.no_anon:
-        if args.user or args.passw:
-            creds.append(Credential(label="anon", username="", password=""))
+    if not args.no_anon and (args.user or args.passw):
+        creds.append(Credential(label="anon", username="", password=""))
 
     # quitar duplicados
     uniq = {}
     for c in creds:
         uniq[(c.username, c.password)] = c
     return list(uniq.values())
+
 
 def print_result(r: ProbeResult, verbose: bool) -> None:
     status = "OK" if r.ok else "FAIL"
@@ -407,17 +470,32 @@ def print_result(r: ProbeResult, verbose: bool) -> None:
         if r.status_code is not None or r.content_type:
             print(f"       HTTP: status={r.status_code} ct={r.content_type}")
 
-def save_csv(results: List[ProbeResult], path: str) -> None:
-    fieldnames = list(asdict(results[0]).keys()) if results else [
-        "endpoint_name","media_type","protocol","credential_label","url","ok","method_used",
-        "status_code","content_type","detail","elapsed_ms"
-    ]
+
+def save_csv(results: list[ProbeResult], path: str) -> None:
+    fieldnames = (
+        list(asdict(results[0]).keys())
+        if results
+        else [
+            "endpoint_name",
+            "media_type",
+            "protocol",
+            "credential_label",
+            "url",
+            "ok",
+            "method_used",
+            "status_code",
+            "content_type",
+            "detail",
+            "elapsed_ms",
+        ]
+    )
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for r in results:
             writer.writerow(asdict(r))
+
 
 def main() -> int:
     args = parse_args()
@@ -430,7 +508,7 @@ def main() -> int:
     print(f"OpenCV: {'OK' if HAS_CV2 else 'NO'} | ffprobe: {'OK' if ffprobe_available() else 'NO'}")
     print("")
 
-    results: List[ProbeResult] = []
+    results: list[ProbeResult] = []
 
     for endpoint in ENDPOINTS:
         name, media_type, protocol, _ = endpoint

@@ -12,7 +12,6 @@ def test_gitignore_exists():
 
 def test_csv_not_tracked():
     result = subprocess.run(
-        ["git", "ls-files", "resultados_cam.csv"],
-        capture_output=True, text=True
+        ["git", "ls-files", "resultados_cam.csv"], capture_output=True, text=True
     )
     assert result.stdout.strip() == "", f"CSV still tracked: {result.stdout.strip()}"
